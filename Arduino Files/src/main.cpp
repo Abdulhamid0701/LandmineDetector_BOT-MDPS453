@@ -1,9 +1,9 @@
 #include <Arduino.h>
 
 #include <L298N.h>
-//#include <MPU6050_Light.h>
-// #include <MPU6050.h>
-// #include <KalmanFilter.h>
+// #include <MPU6050_Light.h>
+//  #include <MPU6050.h>
+//  #include <KalmanFilter.h>
 #include "Wire.h"
 #include <ros.h>
 #include <std_msgs/Float32.h>
@@ -35,6 +35,23 @@ volatile float pos_right = 0; // Right motor encoder position
 // int right_V_ros;
 
 int scenario;
+int prev_cmd;
+int curr_cmd = 0;
+
+/// @brief Obstacle Avoidance Shit
+float motion_cmd = 0;
+float current_millis_avoid;
+float prev_millis_avoid = 0;
+float finished_rot_millis = 0;
+float started_fwd_millis = 0;
+int delwa2ty_fwd = 0;
+int delwa2ty_fwd_oula = 1;
+int delwa2ty_fwd_tanya = 0;
+int Akher_lafa = 0;
+float started_2nd_millis = 0;
+float millis_before_cmd = 0;
+float millis_before_cmd2 = 0;
+int finished_my_shit_flag = 1;
 
 bool rot_finish_flag = 0;
 
@@ -104,7 +121,7 @@ void callBackFunctionMotorRight(const std_msgs::Float32 &right_V_ros)
 
 void callBack_CMD(const std_msgs::Int32 &CMDD)
 {
-  scenario = CMDD.data;
+  motion_cmd = CMDD.data;
 }
 
 void generate_setpoints()
@@ -145,52 +162,214 @@ void generate_setpoints()
   }
 }
 
+void rotate_45_counter_clk()
+{
+  theta_sp = 45;
+
+  err_theta = (theta_sp - angleZ);
+
+  if (abs(err_theta) <= 0.6)
+  {
+    rot_finish_flag = 1;
+    tot_err_vl = 0;
+    tot_err_vl = 0;
+    prev_err_vl = 0;
+    prev_err_vr = 0;
+    prev_err_theta = 0;
+    tot_err_theta = 0;
+    err_theta = 0;
+    err_vl = 0;
+    err_vr = 0;
+    angleZ = 0;
+    finished_rot_millis = millis();
+    delwa2ty_fwd = 1;
+    // myMPU6500.autoOffsets();
+    scenario = 0;
+    motor_left.stop();
+    motor_right.stop();
+    // Serial.println("doneeeeeeeeeee");
+    // delay(100);
+    // return;
+  }
+  else if (err_theta > 0)
+  {
+    // Serial.println(err_theta);
+
+    vright_target = -1;
+    // 4 - kp_angular * abs(err_theta);
+    vleft_target = 3;
+    //+ kp_angular * abs(err_theta) + (err_theta - prev_err_theta)*kd_angular + ki_angular*tot_err_theta;
+  }
+  else
+  {
+    // Serial.println(err_theta);-
+
+    // Serial.println(err_theta);
+    vright_target = 3;
+    //+ kp_angular * abs(err_theta) + (err_theta - prev_err_theta)*kd_angular + ki_angular*tot_err_theta;
+    vleft_target = -1;
+    // 4 - kp_angular * abs(err_theta);
+  }
+
+  prev_err_theta = err_theta;
+  tot_err_theta += err_theta;
+}
 
 void rotate_180_counter_clk()
 {
   theta_sp = 90;
 
   err_theta = (theta_sp - angleZ);
-  
+
   if (abs(err_theta) <= 0.6)
   {
     rot_finish_flag = 1;
-    tot_err_vl      = 0;
-    tot_err_vl      = 0;
-    prev_err_vl     = 0;
-    prev_err_vr     = 0;
-    prev_err_theta  = 0;
-    tot_err_theta   = 0;
-    err_theta       = 0;
-    err_vl          = 0;
-    err_vr          = 0;
-    angleZ          = 0;
-    //myMPU6500.autoOffsets();
+    tot_err_vl = 0;
+    tot_err_vl = 0;
+    prev_err_vl = 0;
+    prev_err_vr = 0;
+    prev_err_theta = 0;
+    tot_err_theta = 0;
+    err_theta = 0;
+    err_vl = 0;
+    err_vr = 0;
+    angleZ = 0;
+    finished_rot_millis = millis();
+    delwa2ty_fwd = 1;
+    // myMPU6500.autoOffsets();
     scenario = 0;
     motor_left.stop();
     motor_right.stop();
-    //Serial.println("doneeeeeeeeeee");
-    //delay(100);
-    //return;
+    // Serial.println("doneeeeeeeeeee");
+    // delay(100);
+    // return;
   }
   else if (err_theta > 0)
   {
-    //Serial.println(err_theta);
+    // Serial.println(err_theta);
 
     vright_target = -1;
-     // 4 - kp_angular * abs(err_theta);
+    // 4 - kp_angular * abs(err_theta);
     vleft_target = 3;
-     //+ kp_angular * abs(err_theta) + (err_theta - prev_err_theta)*kd_angular + ki_angular*tot_err_theta;
-  }
-  else 
-  {
-   // Serial.println(err_theta);-
-
-    //Serial.println(err_theta);
-    vright_target = 3 ;
     //+ kp_angular * abs(err_theta) + (err_theta - prev_err_theta)*kd_angular + ki_angular*tot_err_theta;
-    vleft_target =  -1;
-     // 4 - kp_angular * abs(err_theta);
+  }
+  else
+  {
+    // Serial.println(err_theta);-
+
+    // Serial.println(err_theta);
+    vright_target = 3;
+    //+ kp_angular * abs(err_theta) + (err_theta - prev_err_theta)*kd_angular + ki_angular*tot_err_theta;
+    vleft_target = -1;
+    // 4 - kp_angular * abs(err_theta);
+  }
+
+  prev_err_theta = err_theta;
+  tot_err_theta += err_theta;
+}
+
+void rotate_45_clk()
+{
+  theta_sp = -45;
+
+  err_theta = (theta_sp - angleZ);
+
+  if (abs(err_theta) <= 0.6)
+  {
+    rot_finish_flag = 1;
+    tot_err_vl = 0;
+    tot_err_vl = 0;
+    prev_err_vl = 0;
+    prev_err_vr = 0;
+    prev_err_theta = 0;
+    tot_err_theta = 0;
+    err_theta = 0;
+    err_vl = 0;
+    err_vr = 0;
+    angleZ = 0;
+    finished_rot_millis = millis() ;
+    delwa2ty_fwd = 1;
+    // myMPU6500.autoOffsets();
+    scenario = 0;
+    motor_left.stop();
+    motor_right.stop();
+    prev_basmag = current_basmag;
+    // Serial.println("doneeeeeeeeeee");
+    // delay(100);
+    // return;
+  }
+  else if (err_theta > 0)
+  {
+    // Serial.println(err_theta);
+
+    vright_target = -1;
+    // 4 - kp_angular * abs(err_theta);
+    vleft_target = 3;
+    //+ kp_angular * abs(err_theta) + (err_theta - prev_err_theta)*kd_angular + ki_angular*tot_err_theta;
+  }
+  else
+  {
+    // Serial.println(err_theta);-
+
+    // Serial.println(err_theta);
+    vright_target = 3;
+    //+ kp_angular * abs(err_theta) + (err_theta - prev_err_theta)*kd_angular + ki_angular*tot_err_theta;
+    vleft_target = -1;
+    // 4 - kp_angular * abs(err_theta);
+  }
+
+  prev_err_theta = err_theta;
+  tot_err_theta += err_theta;
+}
+
+void rotate_to_sp(float sp)
+{
+  // theta_sp = -45;
+
+  err_theta = (theta_sp - angleZ);
+
+  if (abs(err_theta) <= 0.7)
+  {
+    rot_finish_flag = 1;
+    tot_err_vl = 0;
+    tot_err_vl = 0;
+    prev_err_vl = 0;
+    prev_err_vr = 0;
+    prev_err_theta = 0;
+    tot_err_theta = 0;
+    err_theta = 0;
+    err_vl = 0;
+    err_vr = 0;
+    angleZ = 0;
+    finished_rot_millis = millis();
+    delwa2ty_fwd = 1;
+    // myMPU6500.autoOffsets();
+    scenario = 0;
+    motor_left.stop();
+    motor_right.stop();
+    prev_basmag = current_basmag;
+    // Serial.println("doneeeeeeeeeee");
+    // delay(100);
+    // return;
+  }
+  else if (err_theta > 0)
+  {
+    // Serial.println(err_theta);
+
+    vright_target = -1.2;
+    // 4 - kp_angular * abs(err_theta);
+    vleft_target = 3.6;
+    //+ kp_angular * abs(err_theta) + (err_theta - prev_err_theta)*kd_angular + ki_angular*tot_err_theta;
+  }
+  else
+  {
+    // Serial.println(err_theta);-
+
+    // Serial.println(err_theta);
+    vright_target = 3.6;
+    //+ kp_angular * abs(err_theta) + (err_theta - prev_err_theta)*kd_angular + ki_angular*tot_err_theta;
+    vleft_target = -1.2;
+    // 4 - kp_angular * abs(err_theta);
   }
 
   prev_err_theta = err_theta;
@@ -203,47 +382,49 @@ void rotate_180_clk()
   theta_sp = -90;
 
   err_theta = (theta_sp - angleZ);
-  
+
   if (abs(err_theta) <= 0.6)
   {
     rot_finish_flag = 1;
-    tot_err_vl      = 0;
-    tot_err_vl      = 0;
-    prev_err_vl     = 0;
-    prev_err_vr     = 0;
-    prev_err_theta  = 0;
-    tot_err_theta   = 0;
-    err_theta       = 0;
-    err_vl          = 0;
-    err_vr          = 0;
-    angleZ          = 0;
-    //myMPU6500.autoOffsets();
+    tot_err_vl = 0;
+    tot_err_vl = 0;
+    prev_err_vl = 0;
+    prev_err_vr = 0;
+    prev_err_theta = 0;
+    tot_err_theta = 0;
+    err_theta = 0;
+    err_vl = 0;
+    err_vr = 0;
+    angleZ = 0;
+    finished_rot_millis = millis();
+    delwa2ty_fwd = 1;
+    // myMPU6500.autoOffsets();
     scenario = 0;
     motor_left.stop();
     motor_right.stop();
     prev_basmag = current_basmag;
-    //Serial.println("doneeeeeeeeeee");
-    //delay(100);
-    //return;
+    // Serial.println("doneeeeeeeeeee");
+    // delay(100);
+    // return;
   }
   else if (err_theta > 0)
   {
-    //Serial.println(err_theta);
+    // Serial.println(err_theta);
 
     vright_target = -1;
-     // 4 - kp_angular * abs(err_theta);
+    // 4 - kp_angular * abs(err_theta);
     vleft_target = 3;
-     //+ kp_angular * abs(err_theta) + (err_theta - prev_err_theta)*kd_angular + ki_angular*tot_err_theta;
-  }
-  else 
-  {
-   // Serial.println(err_theta);-
-
-    //Serial.println(err_theta);
-    vright_target = 3 ;
     //+ kp_angular * abs(err_theta) + (err_theta - prev_err_theta)*kd_angular + ki_angular*tot_err_theta;
-    vleft_target =  -1;
-     // 4 - kp_angular * abs(err_theta);
+  }
+  else
+  {
+    // Serial.println(err_theta);-
+
+    // Serial.println(err_theta);
+    vright_target = 3;
+    //+ kp_angular * abs(err_theta) + (err_theta - prev_err_theta)*kd_angular + ki_angular*tot_err_theta;
+    vleft_target = -1;
+    // 4 - kp_angular * abs(err_theta);
   }
 
   prev_err_theta = err_theta;
@@ -273,12 +454,10 @@ void PID_PWM()
   prev_err_vl = err_vl;
 }
 
-
-
 void move_mots()
 {
-  //int right_speed = (vright / V_Max) * 255;
-  //int left_speed = (vleft / V_Max) * 255;
+  // int right_speed = (vright / V_Max) * 255;
+  // int left_speed = (vleft / V_Max) * 255;
 
   // map PID output to velocities achievable by the motor
   int right_speed = map(abs(vright), 0, V_Max, 20, 255);
@@ -318,14 +497,12 @@ void move_mots()
     motor_left.stop();
   }
 
-
   if (scenario == 0)
   {
     motor_left.stop();
     motor_right.stop();
   }
 }
-
 
 ros::Subscriber<std_msgs::Int32> cmdSUB("COMMAND", &callBack_CMD);
 
@@ -341,29 +518,142 @@ ros::Publisher MPU_Publisher("MPU", &MPU_reading);
 std_msgs::Int32 ROTTFLAG;
 ros::Publisher ROT_Publisher("rotation_flag", &ROTTFLAG);
 
-//MPU6050 mpu(Wire);
+// MPU6050 mpu(Wire);
+
+void motion_scenario_planner()
+{ 
+  
+  // Landmark turning Planner 
+  if (motion_cmd == 2)
+  {
+    current_millis_avoid = millis();
+
+    // Rotate 90 left
+    if ((current_millis_avoid - millis_before_cmd2 > 3000) && rot_finish_flag == 0)
+    {
+      theta_sp = 90;
+      scenario = 11;
+      finished_my_shit_flag = 0;
+    }
+    else
+    {
+      scenario = 0;
+      prev_millis_avoid = current_millis_avoid;
+      finished_my_shit_flag = 0;
+    }
+  }
 
 
+  // Obstacle Avoidance Planner 
+  if (motion_cmd == 3) //  avoid obstacle left
+  {
+    current_millis_avoid = millis();// - millis_before_cmd;
+    // finished_rot_millis = finished_rot_millis - millis_before_cmd;
+
+    // Rotate 45 left
+    if ((current_millis_avoid - millis_before_cmd> 3000) && (current_millis_avoid - millis_before_cmd< 5000) && rot_finish_flag == 0)
+    {
+      theta_sp = 45;
+      scenario = 10;
+      finished_my_shit_flag = 0;
+    }
+
+    // Move FWD a While
+    else if ((current_millis_avoid - finished_rot_millis > 1000) && delwa2ty_fwd == 1 && Akher_lafa == 0 && delwa2ty_fwd_oula == 1)
+    {
+      target_fwd_speed = 4.1;
+      scenario = 1;
+      started_fwd_millis = millis();// - millis_before_cmd;
+      if (started_fwd_millis - finished_rot_millis >= 3000)
+      {
+        delwa2ty_fwd_oula = 0;
+        delwa2ty_fwd = 0;
+        started_2nd_millis = millis();// - millis_before_cmd;
+        finished_rot_millis = 0;
+      }
+      finished_my_shit_flag = 0;
+      // delwa2ty_fwd = 0;
+    }
+
+    // Rotate 90 Right
+    else if ((current_millis_avoid - started_2nd_millis > 1000) && rot_finish_flag == 0 && delwa2ty_fwd_oula == 0 && delwa2ty_fwd == 0 && delwa2ty_fwd_tanya == 0)
+    {
+      theta_sp = -95;
+      scenario = 10;
+      finished_my_shit_flag = 0;
+    }
+
+    // Move FWD a While
+    else if ((current_millis_avoid - finished_rot_millis > 1000) && delwa2ty_fwd_oula == 0 && finished_rot_millis != 0 && delwa2ty_fwd_tanya == 0)
+    {
+      target_fwd_speed = 4;
+      scenario = 1;
+      Akher_lafa = 1;
+      started_fwd_millis = millis();//- millis_before_cmd;
+      if (started_fwd_millis - finished_rot_millis >= 2800)
+      {
+        delwa2ty_fwd_oula = 1;
+        delwa2ty_fwd_tanya = 1;
+      }
+      Akher_lafa = 1;
+      finished_my_shit_flag = 0;
+      // delwa2ty_fwd = 0;
+    }
+
+    // Rotate 45 Left
+    else if ((current_millis_avoid - finished_rot_millis > 3000) && rot_finish_flag == 0 && Akher_lafa == 1 && delwa2ty_fwd_tanya == 1)
+    {
+      theta_sp = 45;
+      scenario = 11;
+      // scenario = 3;
+      prev_millis_avoid = current_millis_avoid;
+      finished_my_shit_flag = 0;
+    }
+
+    // Motion Done
+    else
+    {
+      scenario = 0;
+      finished_my_shit_flag = 0;
+    }
+  }
+
+  // Moving FWD Planner 
+  else if (motion_cmd == 1)
+  {
+    target_fwd_speed = 3.3;
+    scenario = 1;
+    finished_my_shit_flag = 1;
+  }
+
+  // Stopping the robot 
+  else if (motion_cmd == 0)
+  {
+    scenario = 0;
+    finished_my_shit_flag = 1;
+  }
+
+}
 
 void setup()
 {
-  Serial.begin(9600);
+  // Serial.begin(9600);
   Wire.begin();
 
-  scenario = 1;
+  scenario = 0;
 
   if (!myMPU6500.init())
   {
-    Serial.println("MPU6500 does not respond");
+    // Serial.println("MPU6500 does not respond");
   }
   else
   {
-    Serial.println("MPU6500 is connected");
+    // Serial.println("MPU6500 is connected");
   }
-  Serial.println("Position your MPU6500 flat and don't move it - calibrating...");
+  // Serial.println("Position your MPU6500 flat and don't move it - calibrating...");
   delay(1000);
   myMPU6500.autoOffsets();
-  Serial.println("Calibration done!");
+  // Serial.println("Calibration done!");
 
   myMPU6500.enableGyrDLPF();
   myMPU6500.setGyrDLPF(MPU6500_DLPF_6);
@@ -393,7 +683,7 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(3), encoderRightMotor, RISING);
 
   // byte status = mpu.begin();
-  //mpu.calcOffsets(true, true); // gyro and accelero
+  // mpu.calcOffsets(true, true); // gyro and accelero
 
   nh.getHardware()->setBaud(9600);
   nh.initNode();
@@ -408,76 +698,50 @@ void setup()
   prev_micros = 0;
 }
 
-unsigned long delayTime1=2000;
-unsigned long delayTime2=2500;
+unsigned long delayTime1 = 4000;
+unsigned long delayTime2 = 8000;
 
 unsigned long current_micross;
-unsigned long prev_micross=0;
-unsigned long prev_micross1=0;
-unsigned long prev_micross2=0;
+unsigned long prev_micross = 0;
+unsigned long prev_micross1 = 0;
+unsigned long prev_micross2 = 0;
 
 void loop()
 {
   nh.spinOnce();
 
-  //mpu.update();
+  // mpu.update();
 
   xyzFloat gyro = myMPU6500.getGyrValues();
 
   target_fwd_speed = 2;
+  curr_cmd = motion_cmd;
 
-  // Check current scenario chosen by the python node
-  // int cc = scenario;
-
-  //cc = 2;
-
-  //scenario = 1;
-
-  /*current_micross = millis();
-  if (current_micross - prev_micross1>=delayTime1){
-    prev_micross = current_micross;
-    switch(scenario){
-      case 1:
-      scenario=2;
-      break;
-
-      case 2:
-      scenario=1;
-      break;
-    }
-  }*/
-
-  current_micross = millis();
-
-  if (current_micross>=delayTime1 && current_micross <= 2500)
+  if (curr_cmd != prev_cmd && curr_cmd == 3)
   {
-  scenario = 2;
-  prev_micross1=current_micross;
+   millis_before_cmd = millis();
   }
-  /*
-  if (current_micross - prev_micross2>=delayTime2)
+
+  if (curr_cmd != prev_cmd && curr_cmd == 2)
   {
-  scenario = 2;
-  prev_micross2=current_micross;
-  }*/
+   millis_before_cmd2 = millis();
+  }
+  // Serial.println(scenario);
 
 
-
-
-  //Serial.println(scenario);
+  motion_scenario_planner(); // Sends back scenario
 
   if (scenario == 1)
   {
-    
-    // Move forward 
-    target_fwd_speed = 3.8;
+    // Move forward
+    // target_fwd_speed = 3.2;
     theta_sp = 0;
     rot_finish_flag = 0;
     generate_setpoints();
   }
   else if (scenario == 0)
   {
-    // Stop robot 
+    // Stop robot
     target_fwd_speed = 0;
     motor_left.stop();
     motor_right.stop();
@@ -488,20 +752,20 @@ void loop()
     err_theta = 0;
     err_vl = 0;
     err_vr = 0;
+    // rot_finish_flag = 0;
   }
   else if (scenario == 2 && rot_finish_flag == 0)
   {
     // rotate 180 degrees clockwise
     rotate_180_clk();
-    //target_fwd_speed = 4;
-    ///theta_sp = -90;
-    //rot_finish_flag = 0;
-    //generate_setpoints();
+    // target_fwd_speed = 4;
+    /// theta_sp = -90;
+    // rot_finish_flag = 0;
+    // generate_setpoints();
   }
   else if (scenario == 2 && rot_finish_flag == 1)
   {
-
-     // Move forward 
+    // Move forward
     target_fwd_speed = 3.8;
     theta_sp = 0;
     generate_setpoints();
@@ -509,7 +773,7 @@ void loop()
   else if (scenario == 3)
   {
     // rotate 180 degrees anticlockwise
-    rotate_180_counter_clk();
+    rotate_45_counter_clk();
   }
   else if (scenario == 3 && rot_finish_flag == 1)
   {
@@ -521,6 +785,19 @@ void loop()
     tot_err_vl = 0;
     prev_err_vl = 0;
     prev_err_vr = 0;
+  }
+  else if (scenario == 10)
+  {
+    rotate_to_sp(theta_sp);
+  }
+  else if (scenario == 11)
+  {
+    rotate_to_sp(theta_sp);
+    if (rot_finish_flag == 1)
+    {
+      finished_my_shit_flag = 1;
+      rot_finish_flag = 0;
+    }
   }
   else
   {
@@ -542,9 +819,9 @@ void loop()
 
   angleZ += gyro.z * dtt;
 
-  //if (angleZ > 360 || angleZ < -360)
+  // if (angleZ > 360 || angleZ < -360)
   //{
-    //angleZ = 0;
+  // angleZ = 0;
   //}
   angularSpeedLeft = (pos_left - prevEncoderCountLeft) * (2 * PI / cpr) / (0.0100);
   angularSpeedRight = ((pos_right - prevEncoderCountRight) * (2 * PI / cpr) / (0.0100));
@@ -558,24 +835,24 @@ void loop()
   left_encoder_Publisher.publish(&left_encoder);
   MPU_Publisher.publish(&MPU_reading);
 
-  ROTTFLAG.data = rot_finish_flag;
+  ROTTFLAG.data = finished_my_shit_flag;
   ROT_Publisher.publish(&ROTTFLAG);
-
-  
 
   if (current_micros - prev_micris > 0.2e6)
   {
-    //Serial.print("Angular speed left (rad/s): ");
-    //Serial.println(right_encoder.data);
-    //Serial.print("Angular speed right (rad/s): ");
-    //Serial.println(angularSpeedRight);
-    //Serial.print("IMU Yaw Orientation (Degs): ");
-    //Serial.println(angleZ);
-    prev_micris = current_micros;
-    Serial.println(ROTTFLAG.data);
+    // Serial.print("Angular speed left (rad/s): ");
+    // Serial.println(right_encoder.data);
+    // Serial.print("Angular speed right (rad/s): ");
+    // Serial.println(angularSpeedRight);
+    // Serial.print("IMU Yaw Orientation (Degs): ");
+    // Serial.println(angleZ);
+    // prev_micris = current_micros;
+    // Serial.println(ROTTFLAG.data);
   }
   prevEncoderCountLeft = pos_left;
   prevEncoderCountRight = pos_right;
+
+  prev_cmd = curr_cmd;
 
   delay(10);
 }
